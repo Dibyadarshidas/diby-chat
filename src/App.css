@@ -40,3 +40,82 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Mobile header fixes */
+@media screen and (max-width: 480px) {
+  .header-with-toggle {
+    padding: 8px 10px;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  
+  .toggle-sidebar-button {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    margin-right: 5px;
+    flex-shrink: 0;
+  }
+  
+  .toggle-sidebar-button svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .chat-header {
+    padding: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  
+  .chat-header h1 {
+    font-size: 1.1rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+  
+  .header-subtitle {
+    font-size: 0.7rem;
+    margin: 2px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Extra small screens */
+@media screen and (max-width: 375px) {
+  .header-with-toggle {
+    padding: 6px 8px;
+  }
+  
+  .chat-header h1 {
+    font-size: 0.95rem;
+  }
+  
+  .header-subtitle {
+    font-size: 0.6rem;
+  }
+}
+
+/* iOS Safari viewport height fix */
+.app-container {
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+  max-height: -webkit-fill-available;
+}
+
+.sidebar {
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+  max-height: -webkit-fill-available;
+}
+
+.chat-app {
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+  max-height: -webkit-fill-available;
+}
