@@ -2,15 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import ChatMessage from "./components/ChatMessage";
 import ChatInput from "./components/ChatInput";
 import "./index.css";
+import "./App.css";
 
 function App() {
   const [messages, setMessages] = useState([
     {
-      text: "Hi there! I'm your coding assistant powered by TinyLlama. I can help with programming questions and web development topics.",
+      text: "👋 Welcome to Diby Chat Assistant! I'm here to help with your programming and development questions.",
       isUser: false,
     },
     {
-      text: "I specialize in web technologies and can help with coding questions. For example, here's a React component:\n\n```jsx\nfunction Button({ onClick, children, variant = 'primary' }) {\n  return (\n    <button \n      className={`btn btn-${variant}`} \n      onClick={onClick}\n    >\n      {children}\n    </button>\n  );\n}\n\nexport default Button;\n```\n\nYou can ask me about:\n• HTML, CSS and JavaScript\n• React and other frameworks\n• Coding best practices\n• Debugging help\n• Code optimization\n\nJust type your coding question below!",
+      text: "I can assist with coding challenges, explain concepts, and provide examples across various languages and frameworks. For instance, here's a React button component:\n\n```jsx\nfunction Button({ onClick, children, variant = 'primary' }) {\n  return (\n    <button \n      className={`btn btn-${variant}`} \n      onClick={onClick}\n    >\n      {children}\n    </button>\n  );\n}\n\nexport default Button;\n```\n\nFeel free to ask about:\n• JavaScript, HTML, CSS, TypeScript\n• React, Angular, Vue, Node.js\n• Algorithms and data structures\n• Best practices and code optimization\n• Debugging and troubleshooting\n\nWhat coding question can I help you with today?",
       isUser: false,
     },
   ]);
@@ -23,6 +24,9 @@ function App() {
     { id: 'previous3', title: 'React Component Help', isActive: false },
   ]);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
 
   // Close sidebar on mobile devices by default
   useEffect(() => {
@@ -59,15 +63,66 @@ function App() {
     return () => window.removeEventListener('resize', setVhProperty);
   }, []);
 
-  // Auto-scroll to bottom when messages change
+  // Handle scroll event to detect user scrolling and show/hide scroll-to-top button
   useEffect(() => {
+    const messagesContainer = messagesContainerRef.current;
+    if (!messagesContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
+      
+      // Check if user has scrolled up enough to show the button
+      setShowScrollToTop(scrollTop < scrollHeight - clientHeight - 50);
+      
+      // Detect if user is scrolling up
+      if (scrollTop < scrollHeight - clientHeight - 10) {
+        setIsUserScrolling(true);
+      } else {
+        // User has scrolled to the bottom
+        setIsUserScrolling(false);
+      }
+    };
+
+    messagesContainer.addEventListener('scroll', handleScroll);
+    return () => messagesContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Modified auto-scroll behavior that respects user scrolling
+  useEffect(() => {
+    if (!isUserScrolling && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isUserScrolling]);
+
+  // Reset user scrolling when starting a new chat
+  useEffect(() => {
+    if (messages.length <= 2) { // Initial state or new chat
+      setIsUserScrolling(false);
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [messages.length]);
+
+  const scrollToTop = () => {
+    messagesContainerRef.current?.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
+  const scrollToBottom = () => {
+    setIsUserScrolling(false);
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  };
 
   const sendMessage = async (messageText) => {
     // Add user message to chat
     const userMessage = { text: messageText, isUser: true };
     setMessages((prevMessages) => [...prevMessages, userMessage]);
+
+    // Reset scrolling state to ensure auto-scroll to the latest message
+    setIsUserScrolling(false);
 
     // Set loading state
     setIsLoading(true);
@@ -256,10 +311,13 @@ ${messageText}<|endoftext|>
     // Clear messages
     setMessages([
       {
-        text: "Hi there! I'm your coding assistant powered by TinyLlama. I can help with programming questions and web development topics.",
+        text: "👋 Welcome to Diby Chat Assistant! I'm here to help with your programming and development questions.",
         isUser: false,
       }
     ]);
+    
+    // Reset user scrolling state for new chat
+    setIsUserScrolling(false);
   };
 
   const toggleSidebar = () => {
@@ -347,7 +405,7 @@ ${messageText}<|endoftext|>
         </div>
 
         <div className="chat-container">
-          <div className="messages-container">
+          <div className="messages-container" ref={messagesContainerRef}>
             {messages.map((message, index) => (
               <ChatMessage key={index} message={message} />
             ))}
@@ -362,6 +420,33 @@ ${messageText}<|endoftext|>
             )}
             <div ref={messagesEndRef} /> {/* Empty div for auto-scrolling */}
           </div>
+
+          {/* Scroll to top button */}
+          <button 
+            className={`scroll-to-top ${showScrollToTop ? 'visible' : ''}`} 
+            onClick={scrollToTop}
+            aria-label="Scroll to top"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+
+          {/* New scroll to bottom button that appears when user has scrolled up */}
+          {isUserScrolling && (
+            <button 
+              className="scroll-to-top visible" 
+              onClick={scrollToBottom}
+              aria-label="Scroll to bottom"
+              style={{ bottom: "30px" }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <polyline points="19 12 12 19 5 12"></polyline>
+              </svg>
+            </button>
+          )}
 
           <ChatInput onSendMessage={sendMessage} disabled={isLoading} />
         </div>

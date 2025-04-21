@@ -133,13 +133,7 @@ body {
 }
 
 .header-with-toggle {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, #f15a24, #c2185b);
-  padding-left: 16px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  /* These styles will be overridden by App.css */
 }
 
 .toggle-sidebar-button {
@@ -182,23 +176,12 @@ body {
 }
 
 .chat-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background-color: #222;
-  overflow: hidden;
-  width: 100%;
+  /* These will be overridden by App.css */
 }
 
 .messages-container {
-  flex: 1;
-  padding: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  scroll-behavior: smooth;
-  width: 100%;
-  box-sizing: border-box;
+  /* Keep existing styles for message appearance */
+  /* Layout will be controlled by App.css */
 }
 
 /* Message alternating background */
@@ -360,16 +343,8 @@ code {
 
 /* Chat input area */
 .chat-input-form {
-  display: flex;
-  flex-direction: column;
-  padding: 10px max(8%, 100px) 20px;
-  background: linear-gradient(135deg, rgba(241, 90, 36, 0.1), rgba(194, 24, 91, 0.1));
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
+  /* Keep styles for appearance */
+  /* Position will be controlled by App.css */
   width: 100%;
   box-sizing: border-box;
   margin-top: auto;

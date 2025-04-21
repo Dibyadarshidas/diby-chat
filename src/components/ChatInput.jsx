@@ -73,7 +73,7 @@ function ChatInput({ onSendMessage, disabled }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask a coding question... (Shift+Enter for new line)"
+          placeholder="Ask any coding or programming questions... (Shift+Enter for new line)"
           disabled={disabled}
           className="chat-input"
           rows={minRows}
