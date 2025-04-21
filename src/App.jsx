@@ -277,6 +277,24 @@ ${messageText}<|endoftext|>
     }
   };
 
+  // Add this useEffect to fix iOS Safari viewport height issues
+  useEffect(() => {
+    // Set custom property for viewport height (iOS Safari fix)
+    const setVhProperty = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    // Set on initial load
+    setVhProperty();
+    
+    // Update on resize
+    window.addEventListener('resize', setVhProperty);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', setVhProperty);
+  }, []);
+
   return (
     <div className="app-container">
       <div className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
