@@ -23,17 +23,75 @@ function ChatMessage({ message }) {
       setTimeout(() => setCopiedIndex(null), 2000);
     });
   };
+
+  // Format regular text with markdown-like syntax
+  const formatTextWithMarkdown = (text) => {
+    // Process bold text (**text** or __text__)
+    text = text.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
+    
+    // Process italic text (*text* or _text_)
+    text = text.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+    
+    // Process headings (### Heading)
+    text = text.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>');
+    text = text.replace(/^##\s+(.*)$/gm, '<h2>$1</h2>');
+    text = text.replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
+    
+    // Process bullet lists
+    text = text.replace(/^[•-]\s+(.*)$/gm, '<li>$1</li>');
+    
+    // Process numbered lists
+    text = text.replace(/^\d+\.\s+(.*)$/gm, '<li>$1</li>');
+    
+    // Wrap lists in ul/ol tags (simple approach)
+    if (text.includes('<li>')) {
+      let inList = false;
+      const lines = text.split('\n');
+      
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('<li>') && !inList) {
+          lines[i] = '<ul>' + lines[i];
+          inList = true;
+        } else if (!lines[i].includes('<li>') && inList) {
+          lines[i-1] = lines[i-1] + '</ul>';
+          inList = false;
+        }
+      }
+      
+      // Close list if it's still open at the end
+      if (inList) {
+        lines[lines.length-1] = lines[lines.length-1] + '</ul>';
+      }
+      
+      text = lines.join('\n');
+    }
+    
+    return text;
+  };
   
   // Function to format message text with code blocks
   const formatMessage = (text) => {
     // Check if the text contains code blocks
     if (!text.includes('```')) {
-      // Format regular text - split by newlines and create paragraph elements
-      return text.split('\n').map((line, index) => (
-        line.trim() === '' ? 
-        <br key={index} /> : 
-        <p key={index}>{line}</p>
-      ));
+      // Format regular text with markdown-like syntax
+      const formattedText = formatTextWithMarkdown(text);
+      
+      // Split by newlines and create paragraph elements
+      return formattedText.split('\n').map((line, index) => {
+        if (line.trim() === '') {
+          return <br key={index} />;
+        } else if (line.startsWith('<h1>')) {
+          return <h1 key={index} dangerouslySetInnerHTML={{ __html: line.replace(/<h1>|<\/h1>/g, '') }} />;
+        } else if (line.startsWith('<h2>')) {
+          return <h2 key={index} dangerouslySetInnerHTML={{ __html: line.replace(/<h2>|<\/h2>/g, '') }} />;
+        } else if (line.startsWith('<h3>')) {
+          return <h3 key={index} dangerouslySetInnerHTML={{ __html: line.replace(/<h3>|<\/h3>/g, '') }} />;
+        } else if (line.startsWith('<ul>')) {
+          return <ul key={index} dangerouslySetInnerHTML={{ __html: line.replace(/<ul>|<\/ul>/g, '') }} />;
+        } else {
+          return <p key={index} dangerouslySetInnerHTML={{ __html: line }} />;
+        }
+      });
     }
 
     const segments = [];
@@ -45,11 +103,21 @@ function ChatMessage({ message }) {
       // Add text before code block - split by newlines for proper formatting
       if (codeBlockStart > currentIndex) {
         const textBeforeCodeBlock = text.substring(currentIndex, codeBlockStart);
-        textBeforeCodeBlock.split('\n').forEach((line, idx) => {
+        const formattedText = formatTextWithMarkdown(textBeforeCodeBlock);
+        
+        formattedText.split('\n').forEach((line, idx) => {
           if (line.trim() === '') {
             segments.push(<br key={`br-${currentIndex}-${idx}`} />);
+          } else if (line.startsWith('<h1>')) {
+            segments.push(<h1 key={`h1-${currentIndex}-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<h1>|<\/h1>/g, '') }} />);
+          } else if (line.startsWith('<h2>')) {
+            segments.push(<h2 key={`h2-${currentIndex}-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<h2>|<\/h2>/g, '') }} />);
+          } else if (line.startsWith('<h3>')) {
+            segments.push(<h3 key={`h3-${currentIndex}-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<h3>|<\/h3>/g, '') }} />);
+          } else if (line.startsWith('<ul>')) {
+            segments.push(<ul key={`ul-${currentIndex}-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<ul>|<\/ul>/g, '') }} />);
           } else {
-            segments.push(<p key={`text-${currentIndex}-${idx}`}>{line}</p>);
+            segments.push(<p key={`text-${currentIndex}-${idx}`} dangerouslySetInnerHTML={{ __html: line }} />);
           }
         });
       }
@@ -114,11 +182,21 @@ function ChatMessage({ message }) {
     // Add any remaining text - split by newlines for proper formatting
     if (currentIndex < text.length) {
       const remainingText = text.substring(currentIndex);
-      remainingText.split('\n').forEach((line, idx) => {
+      const formattedText = formatTextWithMarkdown(remainingText);
+      
+      formattedText.split('\n').forEach((line, idx) => {
         if (line.trim() === '') {
           segments.push(<br key={`br-end-${idx}`} />);
+        } else if (line.startsWith('<h1>')) {
+          segments.push(<h1 key={`h1-end-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<h1>|<\/h1>/g, '') }} />);
+        } else if (line.startsWith('<h2>')) {
+          segments.push(<h2 key={`h2-end-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<h2>|<\/h2>/g, '') }} />);
+        } else if (line.startsWith('<h3>')) {
+          segments.push(<h3 key={`h3-end-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<h3>|<\/h3>/g, '') }} />);
+        } else if (line.startsWith('<ul>')) {
+          segments.push(<ul key={`ul-end-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/<ul>|<\/ul>/g, '') }} />);
         } else {
-          segments.push(<p key={`text-end-${idx}`}>{line}</p>);
+          segments.push(<p key={`text-end-${idx}`} dangerouslySetInnerHTML={{ __html: line }} />);
         }
       });
     }
@@ -140,6 +218,9 @@ function ChatMessage({ message }) {
       <div className="message-content">
         <div className="message-text">
           {formatMessage(message.text)}
+          {!message.isUser && message.isTyping && (
+            <span className="typing-cursor"></span>
+          )}
         </div>
         <span className="message-time">{timestamp}</span>
       </div>

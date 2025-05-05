@@ -1,8 +1,37 @@
 import { useState, useEffect, useRef } from "react";
 import ChatMessage from "./components/ChatMessage";
 import ChatInput from "./components/ChatInput";
+import { apiConfig } from "./config/api";
+import { getSavedConversations, saveConversation, getConversationById } from "./utils/chatStorage";
 import "./index.css";
 import "./App.css";
+
+// Format a date for display in the sidebar
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  // Today: Show time
+  if (diffDays === 0) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  // Yesterday: Show "Yesterday"
+  else if (diffDays === 1) {
+    return 'Yesterday';
+  }
+  // Within last 7 days: Show day name
+  else if (diffDays < 7) {
+    return date.toLocaleDateString([], { weekday: 'short' });
+  }
+  // Older: Show date
+  else {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+};
 
 function App() {
   const [messages, setMessages] = useState([
@@ -19,14 +48,61 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
   const [conversations, setConversations] = useState([
     { id: 'current', title: 'Current Chat', isActive: true },
-    { id: 'previous1', title: 'Previous Chat 1', isActive: false },
-    { id: 'previous2', title: 'Previous Chat 2', isActive: false },
-    { id: 'previous3', title: 'React Component Help', isActive: false },
   ]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const [currentResponse, setCurrentResponse] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [fullResponse, setFullResponse] = useState('');
+  const typingSpeedRef = useRef(30); // ms per character
+
+  // Load saved conversations on initial load
+  useEffect(() => {
+    const savedConversations = getSavedConversations();
+    if (savedConversations.length > 0) {
+      // Add current conversation if it doesn't exist
+      if (!savedConversations.find(conv => conv.id === 'current')) {
+        savedConversations.unshift({ 
+          id: 'current', 
+          title: 'Current Chat', 
+          isActive: true,
+          messages: [...messages]
+        });
+      } else {
+        // Make sure current conversation is active
+        savedConversations.forEach(conv => {
+          conv.isActive = conv.id === 'current';
+        });
+      }
+      
+      setConversations(savedConversations);
+    } else {
+      // Initialize with current conversation
+      saveConversation({ 
+        id: 'current', 
+        title: 'Current Chat', 
+        isActive: true,
+        messages: [...messages]
+      });
+    }
+  }, []);
+
+  // Save messages when they change
+  useEffect(() => {
+    // Only save if we have at least one message
+    if (messages.length > 0) {
+      const activeConversation = conversations.find(conv => conv.isActive);
+      if (activeConversation) {
+        saveConversation({
+          ...activeConversation,
+          messages: [...messages],
+          lastUpdated: new Date().toISOString()
+        });
+      }
+    }
+  }, [messages, conversations]);
 
   // Close sidebar on mobile devices by default
   useEffect(() => {
@@ -104,6 +180,37 @@ function App() {
     }
   }, [messages.length]);
 
+  // Effect for the typing animation
+  useEffect(() => {
+    if (!fullResponse || !isTyping) return;
+    
+    let displayedLength = currentResponse.length;
+    const totalLength = fullResponse.length;
+    
+    if (displayedLength >= totalLength) {
+      setIsTyping(false);
+      return;
+    }
+    
+    // Calculate typing speed based on response length
+    // Longer responses type faster
+    const baseSpeed = 30; // ms
+    const speed = fullResponse.length > 500 ? 5 : 
+                 fullResponse.length > 200 ? 10 : 
+                 fullResponse.length > 100 ? 20 : baseSpeed;
+    typingSpeedRef.current = speed;
+    
+    // Add the next character
+    const timer = setTimeout(() => {
+      // Add 1-3 characters at a time for a more natural effect
+      const charsToAdd = Math.floor(Math.random() * 3) + 1;
+      const newDisplayedLength = Math.min(displayedLength + charsToAdd, totalLength);
+      setCurrentResponse(fullResponse.substring(0, newDisplayedLength));
+    }, typingSpeedRef.current);
+    
+    return () => clearTimeout(timer);
+  }, [fullResponse, currentResponse, isTyping]);
+
   const scrollToTop = () => {
     messagesContainerRef.current?.scrollTo({
       top: 0,
@@ -128,34 +235,23 @@ function App() {
     setIsLoading(true);
 
     try {
-      // Get API response
-      let response;
+      // Call Cohere API
+      const response = await callCohereAPI(messageText);
       
-      try {
-        // First try the Hugging Face API
-        response = await callHuggingFaceAPI(messageText);
-      } catch (huggingFaceError) {
-        console.error("Hugging Face API failed:", huggingFaceError);
-        
-        try {
-          // Then try the fallback API
-          response = await callFallbackAPI(messageText);
-        } catch (fallbackError) {
-          console.error("Fallback API failed:", fallbackError);
-          
-          // Finally, try the direct generation API
-          response = await callDirectGenerationAPI();
-        }
-      }
-
-      // Add AI response to chat
-      const aiMessage = { text: response, isUser: false };
+      // Start typing animation
+      setFullResponse(response);
+      setCurrentResponse('');
+      setIsTyping(true);
+      
+      // Add empty AI message that will be filled with the typing animation
+      const aiMessage = { text: '', isUser: false, isTyping: true };
       setMessages((prevMessages) => [...prevMessages, aiMessage]);
+      
     } catch (error) {
-      console.error("Error in all API attempts:", error);
+      console.error("Error in API call:", error);
       // Add error message
       const errorMessage = {
-        text: "Sorry, I encountered an error with all available services. Please try again later.",
+        text: "Sorry, I encountered an error. Please try again later.",
         isUser: false,
       };
       setMessages((prevMessages) => [...prevMessages, errorMessage]);
@@ -165,75 +261,101 @@ function App() {
     }
   };
 
-  const callHuggingFaceAPI = async (messageText) => {
-    // Using TinyLlama model as suggested
-    const API_URL =
-      "https://api-inference.huggingface.co/models/TinyLlama/TinyLlama-1.1B-Chat-v1.0";
-    const API_KEY = import.meta.env.VITE_HUGGING_FACE_API_KEY; // Use environment variable
-
-    try {
-      // Format the prompt for TinyLlama chat model with focus on code questions
-      const prompt = `<|system|>
-You are a coding assistant created by Dibyadarshi. You only answer questions related to programming, software development, web technologies, and technical topics. 
-For non-coding questions, politely explain that you're designed to help specifically with development and coding topics.
-You have expertise in HTML, CSS, JavaScript, React, and other web technologies.
-Be concise and helpful in your explanations, and provide code examples when appropriate.<|endoftext|>
-<|user|>
-${messageText}<|endoftext|>
-<|assistant|>`;
+  // Update the latest message with the current typing text
+  useEffect(() => {
+    if (isTyping && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
       
-      const response = await fetch(API_URL, {
+      // Only update if the last message is from the AI and is typing
+      if (!lastMessage.isUser && lastMessage.isTyping) {
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages];
+          updatedMessages[updatedMessages.length - 1] = {
+            ...lastMessage,
+            text: currentResponse
+          };
+          return updatedMessages;
+        });
+      }
+    }
+  }, [currentResponse, isTyping]);
+  
+  // When typing is done, remove the isTyping flag
+  useEffect(() => {
+    if (!isTyping && fullResponse && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      
+      // Only update if the last message is from the AI and was typing
+      if (!lastMessage.isUser && lastMessage.isTyping) {
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages];
+          updatedMessages[updatedMessages.length - 1] = {
+            ...lastMessage,
+            text: fullResponse,
+            isTyping: false
+          };
+          return updatedMessages;
+        });
+        
+        // Reset the full response
+        setFullResponse('');
+      }
+    }
+  }, [isTyping, fullResponse]);
+
+  const callCohereAPI = async (messageText) => {
+    try {
+      // Get API settings from config
+      const { apiKey, apiUrl, model } = apiConfig.cohere;
+      
+      // Get current conversation messages for context
+      // Take the last 10 messages or fewer to avoid token limits
+      const contextMessages = messages
+        .slice(-10) // Get last 10 messages
+        .map(msg => ({
+          role: msg.isUser ? "user" : "assistant",
+          content: msg.text
+        }));
+      
+      // Add the current message
+      const allMessages = [
+        ...contextMessages,
+        {
+          role: "user", 
+          content: messageText
+        }
+      ];
+      
+      // Call Cohere API with exact payload format specified
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          inputs: prompt,
-          parameters: {
-            max_new_tokens: 250,
-            temperature: 0.7,
-            top_p: 0.95,
-            do_sample: true,
-            return_full_text: false
-          }
+          "stream": false,
+          "model": model,
+          "messages": allMessages
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error("API Response Error:", errorText);
-        
-        // Check for specific error messages
-        if (errorText.includes("Model is loading")) {
-          return "The TinyLlama model is currently loading. This might take a few seconds for the first request. Please try again in a moment.";
-        } else if (errorText.includes("too large to be loaded")) {
-          // Try a fallback model if the current one is too large
-          return await callFallbackAPI(messageText);
-        }
-        
         return `I'm sorry, there was an error communicating with the AI service (${response.status}). Please try again later.`;
       }
 
       const result = await response.json();
-
-      if (result.error) {
-        console.error("API Response Error:", result.error);
-        return `Sorry, there was an error: ${result.error}`;
-      }
-
-      if (Array.isArray(result) && result.length > 0 && result[0].generated_text) {
-        let text = result[0].generated_text.trim();
-        
-        // Clean up the TinyLlama format markers if present
-        text = text.replace(/<\|assistant\|>/g, "");
-        text = text.replace(/<\|endoftext\|>/g, "");
-        text = text.replace(/<\|user\|>/g, "");
-        text = text.replace(/<\|system\|>/g, "");
-        
+      console.log("API Response:", result);
+      
+      // Process the Cohere API response
+      if (result.message && result.message.content && result.message.content.length > 0) {
+        // Get the text content from the first message
+        const text = result.message.content[0].text;
         return text;
       }
-
+      
       return "I couldn't generate a proper response. Please try again with a different question.";
     } catch (error) {
       console.error("API Error:", error);
@@ -241,80 +363,60 @@ ${messageText}<|endoftext|>
     }
   };
 
-  // Fallback to an even smaller model
-  const callFallbackAPI = async (messageText) => {
-    // Use a very small model as fallback
-    const API_URL =
-      "https://api-inference.huggingface.co/models/distilgpt2";
-    const API_KEY = import.meta.env.VITE_HUGGING_FACE_API_KEY; // Use environment variable
-
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: `Question: ${messageText}\nAnswer:`,
-          parameters: {
-            max_length: 100,
-            temperature: 0.7,
-            return_full_text: false
-          }
-        }),
-      });
-
-      if (!response.ok) {
-        return "I'm sorry, all our AI models are currently busy. Please try again in a few moments.";
-      }
-
-      const result = await response.json();
-      
-      if (result.generated_text) {
-        return result.generated_text.trim();
-      }
-      
-      return "I couldn't process that request. Please try another question.";
-    } catch (error) {
-      console.error("Fallback API Error:", error);
-      return "Sorry, I'm having trouble connecting to my AI services right now. Please try again later.";
+  const selectConversation = (id) => {
+    // Update active conversation
+    setConversations(prevConversations => {
+      return prevConversations.map(conv => ({
+        ...conv, 
+        isActive: conv.id === id
+      }));
+    });
+    
+    // Load conversation messages if they exist
+    const conversation = getConversationById(id);
+    if (conversation && conversation.messages) {
+      setMessages(conversation.messages);
+    } else if (id !== 'current') {
+      // For new conversations, reset to welcome message
+      setMessages([
+        {
+          text: "👋 Welcome to a new conversation! How can I help you today?",
+          isUser: false,
+        }
+      ]);
     }
-  };
-
-  // Direct text generation API (most reliable, but simple)
-  const callDirectGenerationAPI = async () => {
-    try {
-      // Use a basic text completion API (random quotes and facts service as fallback)
-      const response = await fetch("https://api.quotable.io/random");
-      
-      if (!response.ok) {
-        return "I apologize, but all our AI services are currently unavailable. Here's a creative response instead: The best way to predict the future is to create it.";
-      }
-      
-      const data = await response.json();
-      return `I apologize, but our AI chat models are currently unavailable. Here's a quote instead:\n\n"${data.content}"\n\n— ${data.author}`;
-    } catch (error) {
-      console.error("Direct Generation API Error:", error);
-      return "All our services are temporarily unavailable. Please try again later.";
-    }
+    
+    // Reset user scrolling state for new conversation
+    setIsUserScrolling(false);
   };
 
   const startNewChat = () => {
-    // Update conversations list
+    // Create a new conversation with timestamp-based ID
     const newId = `chat-${Date.now()}`;
+    const newConversation = { 
+      id: newId, 
+      title: 'New Chat', 
+      isActive: true,
+      messages: [
+        {
+          text: "👋 Welcome to Diby Chat Assistant! I'm here to help with your programming and development questions.",
+          isUser: false,
+        }
+      ],
+      createdAt: new Date().toISOString()
+    };
+    
+    // Update conversations list
     setConversations(prevConversations => {
       return prevConversations.map(conv => ({...conv, isActive: false}))
-        .concat([{ id: newId, title: 'New Chat', isActive: true }]);
+        .concat([newConversation]);
     });
     
-    // Clear messages
-    setMessages([
-      {
-        text: "👋 Welcome to Diby Chat Assistant! I'm here to help with your programming and development questions.",
-        isUser: false,
-      }
-    ]);
+    // Set initial messages
+    setMessages(newConversation.messages);
+    
+    // Save the new conversation
+    saveConversation(newConversation);
     
     // Reset user scrolling state for new chat
     setIsUserScrolling(false);
@@ -332,25 +434,50 @@ ${messageText}<|endoftext|>
     }
   };
 
-  const selectConversation = (id) => {
+  // Rename a conversation
+  const renameConversation = (id, newTitle) => {
     setConversations(prevConversations => {
-      return prevConversations.map(conv => ({
-        ...conv, 
-        isActive: conv.id === id
-      }));
-    });
-    
-    // In a real app, we would load the conversation history here
-    // For this demo, we'll just reset to the initial messages
-    if (id !== 'current') {
-      setMessages([
-        {
-          text: "This is a previous conversation. In a real app, we would load the conversation history here.",
-          isUser: false,
+      const updatedConversations = prevConversations.map(conv => {
+        if (conv.id === id) {
+          const updated = { ...conv, title: newTitle };
+          // Save the updated conversation
+          saveConversation(updated);
+          return updated;
         }
-      ]);
-    }
+        return conv;
+      });
+      return updatedConversations;
+    });
   };
+
+  // Get a conversation title based on content
+  const generateConversationTitle = (messages) => {
+    // Find first user message that's not empty
+    const firstUserMessage = messages.find(msg => msg.isUser && msg.text.trim().length > 0);
+    
+    if (firstUserMessage) {
+      // Get first 30 characters of the message
+      const title = firstUserMessage.text.trim().substring(0, 30);
+      // Add ellipsis if truncated
+      return title.length < firstUserMessage.text.trim().length ? `${title}...` : title;
+    }
+    
+    return 'New Conversation';
+  };
+
+  // Auto-rename new conversations based on first user message
+  useEffect(() => {
+    const activeConversation = conversations.find(conv => conv.isActive);
+    
+    // Only auto-rename if the title is "New Chat" and we have user messages
+    if (activeConversation && 
+        activeConversation.title === 'New Chat' && 
+        messages.some(msg => msg.isUser)) {
+      
+      const suggestedTitle = generateConversationTitle(messages);
+      renameConversation(activeConversation.id, suggestedTitle);
+    }
+  }, [messages]);
 
   return (
     <div className="app-container">
@@ -366,16 +493,30 @@ ${messageText}<|endoftext|>
         </div>
         <div className="sidebar-content">
           <div className="conversations-list">
-            {conversations.map(conversation => (
+            {conversations
+              .sort((a, b) => {
+                // Sort by lastUpdated date (most recent first)
+                const dateA = a.lastUpdated ? new Date(a.lastUpdated) : new Date(0);
+                const dateB = b.lastUpdated ? new Date(b.lastUpdated) : new Date(0);
+                return dateB - dateA;
+              })
+              .map(conversation => (
               <div 
                 key={conversation.id} 
                 className={`conversation-item ${conversation.isActive ? 'active' : ''}`}
                 onClick={() => selectConversation(conversation.id)}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                {conversation.title}
+                <div className="conversation-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                </div>
+                <div className="conversation-details">
+                  <div className="conversation-title">{conversation.title}</div>
+                  {conversation.lastUpdated && (
+                    <div className="conversation-date">{formatDate(conversation.lastUpdated)}</div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -400,7 +541,7 @@ ${messageText}<|endoftext|>
           </button>
           <header className="chat-header">
             <h1>Diby Chat Assistant</h1>
-            <p className="header-subtitle">Powered by TinyLlama</p>
+            <p className="header-subtitle">Powered by Cohere AI</p>
           </header>
         </div>
 
